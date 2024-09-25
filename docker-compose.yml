@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+    asr_websocket_server-core:
+        image: asr_websocket_server-core:latest
+        container_name: asr_websocket_server-core
+        build:
+            context: .
+            dockerfile: ./docker-images-build/core/Dockerfile
+
