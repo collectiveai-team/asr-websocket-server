@@ -1,32 +1,5 @@
 version: "3.8"
 services:
-    devcontainer-gpu:
-        network_mode: host
-        image: asr_websocket_server-devcontainer
-        container_name: asr_websocket_server-devcontainer-gpu
-        build:
-            context: ..
-            dockerfile: .devcontainer/Dockerfile
-            args:
-                - USER_NAME=vscode
-                - USER_UID=1000
-                - USER_GID=1000
-        env_file: ../.env
-
-        deploy:
-            resources:
-                reservations:
-                    devices:
-                        - capabilities: [ gpu ]
-        shm_size: "8gb"
-        volumes:
-            - ..:/workspace:cached
-            - ../notebooks/:/notebooks
-            - ../resources/:/resources
-            - $HOME/.ssh/:/home/vscode/.ssh
-            - $HOME/.gitconfig:/home/vscode/.gitconfig
-        command: /bin/sh -c "while sleep 1000; do :; done"
-
     devcontainer:
         network_mode: host
         image: asr_websocket_server-devcontainer
@@ -47,3 +20,10 @@ services:
             - $HOME/.ssh/:/home/vscode/.ssh
             - $HOME/.gitconfig:/home/vscode/.gitconfig
         command: /bin/sh -c "while sleep 1000; do :; done"
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        - driver: nvidia
+                          count: 1
+                          capabilities: [gpu]

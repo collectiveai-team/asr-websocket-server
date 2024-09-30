@@ -2,7 +2,7 @@ FROM ubuntu:20.04
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV DEBIAN_FRONTEND noninteractive
 
-ARG PYTHON_VERSION=python3.12
+ARG PYTHON_VERSION=python3.11
 ARG PIP_VERSION=23.3.2
 
 
@@ -27,6 +27,9 @@ RUN apt-get install -y --no-install-recommends \
     vim \
     parallel \
     gcc \
+    portaudio19-dev \
+    libsndfile1 \
+    ffmpeg \
     python3-setuptools \
     ${PYTHON_VERSION} \
     ${PYTHON_VERSION}-dev \
@@ -38,6 +41,14 @@ RUN apt-get install -y --no-install-recommends \
 # Set default python version
 RUN update-alternatives --install /usr/bin/python python /usr/bin/${PYTHON_VERSION} 1 \
     && update-alternatives --install /usr/bin/python3 python3 /usr/bin/${PYTHON_VERSION} 1
+
+WORKDIR /tmp
+# Install pip
+RUN wget https://github.com/pypa/pip/archive/refs/tags/${PIP_VERSION}.zip --no-check-certificate \
+    && unzip ${PIP_VERSION}.zip \
+    && cd pip-${PIP_VERSION} \
+    && python setup.py install
+
 
 # Install Poetry
 RUN curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python && \
@@ -51,8 +62,8 @@ WORKDIR /tmp
 # Install pytorch
 
 
-# Install awss 
-COPY ./awss  /tmp/awss 
+# Install awss
+COPY ./awss  /tmp/awss
 COPY ./pyproject.toml /tmp/pyproject.toml
 
 RUN --mount=type=cache,target=/root/.cache \
@@ -61,4 +72,3 @@ RUN --mount=type=cache,target=/root/.cache \
 RUN rm -rf /tmp/*
 
 WORKDIR /root
-
