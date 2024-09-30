@@ -15,11 +15,36 @@ from fastapi import Query, Depends, FastAPI, WebSocket, WebSocketDisconnect
 
 from awss.streaming.webrtc_vad_model import WebRTCVAD
 from awss.streaming.stream_manager import StreamManager
+from awss.meta.streaming_interfaces import ASRStreamingInterface
 from awss.streaming.frames_chunk_policy import FramesChunkPolicy
 from awss.streaming.whisper_streaming import WhisperForStreaming
 from awss.streaming.speech_recognition_manager import SpeechRecognitionStreamManager
 
 # from awss.streaming.nemo_streaming import ConformerCTCForStreaming
+
+
+def load_custom_model() -> ASRStreamingInterface:
+    import os
+    from importlib import import_module
+
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+    custom_model_path = os.getenv("CUSTOM_MODEL_PATH")
+
+    if custom_model_path:
+        module_path, class_name = custom_model_path.rsplit(".", 1)
+        module = import_module(module_path)
+        CustomModelClass = getattr(module, class_name)
+
+        assert issubclass(
+            CustomModelClass, ASRStreamingInterface
+        ), "CustomModelClass must implement ASRStreamingInterface"
+        return CustomModelClass()
+
+    else:
+        raise ValueError("CUSTOM_MODEL_PATH not set in .env file")
 
 
 class UvicornServer(multiprocessing.Process):
@@ -52,7 +77,7 @@ VADModel = Enum(value="VADModel", names=[(k, k) for k in VAD_LOADER])
 
 
 # MODELS = {"nemo": ConformerCTCForStreaming, "whisper": WhisperForStreaming}
-MODELS = {"whisper": WhisperForStreaming}
+MODELS = {"whisper": WhisperForStreaming, "custom": load_custom_model}
 Model = Enum(value="Model", names=[(k, k) for k in MODELS])
 
 STREAM_MANAGERS = {"speech": SpeechRecognitionStreamManager, "default": StreamManager}
@@ -205,5 +230,6 @@ def cli(
 
 
 if __name__ == "__main__":
+    app()
     app()
     app()
