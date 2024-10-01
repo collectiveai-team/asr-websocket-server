@@ -1,24 +1,24 @@
 #!/usr/bin/python
-import gc
-import sys
 import asyncio
+import gc
 import logging
 import multiprocessing
+import sys
+from _thread import start_new_thread
 from enum import Enum
 from queue import Queue
-from _thread import start_new_thread
 
 import typer
 import uvicorn
+from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
-from fastapi import Query, Depends, FastAPI, WebSocket, WebSocketDisconnect
 
-from awss.streaming.webrtc_vad_model import WebRTCVAD
-from awss.streaming.stream_manager import StreamManager
 from awss.meta.streaming_interfaces import ASRStreamingInterface
 from awss.streaming.frames_chunk_policy import FramesChunkPolicy
-from awss.streaming.whisper_streaming import WhisperForStreaming
 from awss.streaming.speech_recognition_manager import SpeechRecognitionStreamManager
+from awss.streaming.stream_manager import StreamManager
+from awss.streaming.webrtc_vad_model import WebRTCVAD
+from awss.streaming.whisper_streaming import WhisperForStreaming
 
 # from awss.streaming.nemo_streaming import ConformerCTCForStreaming
 
@@ -230,6 +230,4 @@ def cli(
 
 
 if __name__ == "__main__":
-    app()
-    app()
     app()
