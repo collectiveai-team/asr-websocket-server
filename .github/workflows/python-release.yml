@@ -15,11 +15,6 @@ jobs:
         steps:
             - uses: actions/checkout@v2
 
-            - name: Load .env file
-              uses: xom9ikk/dotenv@v2
-              with:
-                  path: .devcontainer/
-
             - name: Set up Python
               uses: actions/setup-python@v2
               with:
