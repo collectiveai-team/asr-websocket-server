@@ -71,3 +71,8 @@ filterwarnings = [
 [tool.poetry.scripts]
 awss-server = "awss.server.websocket_server:app"
 awss-stream-audio = "awss.client.stream_audio_file:app"
+
+
+[project.scripts]
+awss-server = "awss.server.websocket_server:app"
+awss-stream-audio = "awss.client.stream_audio_file:app"
