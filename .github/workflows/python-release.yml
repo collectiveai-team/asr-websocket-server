@@ -4,6 +4,8 @@ on:
     push:
         tags:
             - "v*"
+        branches: 
+            - "feature/build-package"
 
 jobs:
     build-and-release:
@@ -21,16 +23,19 @@ jobs:
             - name: Set up Python
               uses: actions/setup-python@v2
               with:
-                  python-version: ${{ env.PYTHON_VERSION }}
+                  python-version: 3.11
+
+            - name: Install Poetry
+            run: |
+                curl -sSL https://install.python-poetry.org | python3 -
 
             - name: Install dependencies
-              run: |
-                  python -m pip install --upgrade pip
-                  pip install build wheel
+            run: |
+                poetry install
 
             - name: Build wheel
-              run: |
-                  python -m build
+            run: |
+                poetry build
 
             - name: Create GitHub Release
               id: create_release
