@@ -26,15 +26,15 @@ jobs:
                   python-version: 3.11
 
             - name: Install Poetry
-            run: |
+              run: |
                 curl -sSL https://install.python-poetry.org | python3 -
 
             - name: Install dependencies
-            run: |
+              run: |
                 poetry install
 
             - name: Build wheel
-            run: |
+              run: |
                 poetry build
 
             - name: Create GitHub Release
