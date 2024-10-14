@@ -16,6 +16,40 @@ logger = logging.getLogger(__name__)
 
 app = typer.Typer()
 
+def setup_connection(endpoint, params, source_sr, frame_duration):
+    buffer_length = int(source_sr * frame_duration / 1000)
+    client = create_connection(f'{endpoint}?{"&".join(params)}')
+    responses = []
+
+    def read_transcript(client):
+        while True:
+            try:
+                response = client.recv()
+                logger.info(f"reciving response:\n\t{response}\n")
+                responses.append(response)
+            except WebSocketDisconnect:
+                break
+            except Exception:
+                continue
+
+    start_new_thread(read_transcript, (client,))
+    return client, buffer_length, responses
+
+def stream_audio(client, audio_path, source_sr, frame_duration, buffer_length):
+    signal, sr = librosa.load(audio_path, sr=source_sr, mono=True)
+    duration = librosa.get_duration(signal, sr=source_sr)
+    buffer = io.BytesIO()
+    sf.write(buffer, signal, samplerate=sr, subtype="PCM_16", format="wav")
+    buffer.seek(0)
+
+    start_time = time.time()
+    while data := buffer.read(buffer_length):
+        if client.send_binary(data):
+            time.sleep(frame_duration / 1000 / 2)
+    logger.info(
+        f"It tooks {time.time() - start_time} to reproduce the audio of {duration}"
+    )
+    client.close()
 
 @app.command()
 def cli(
@@ -40,41 +74,14 @@ def cli(
         help="Additional parameters for the prediction",
     ),
 ):
-    # Setting buffer length
-    buffer_length = int(source_sr * frame_duration / 1000)
-    client = create_connection(f'{endpoint}?{"&".join(params)}')
+    client, buffer_length, responses = setup_connection(endpoint, params, source_sr, frame_duration)
+    stream_audio(client, audio_path, source_sr, frame_duration, buffer_length)
 
-    responses = []
+    if responses:
+        logger.info(f"Transcript: \n{responses[-1]}")
+    
 
-    def read_transcript(client):
-        while True:
-            try:
-                response = client.recv()
-                logger.info(f"reciving response:\n\t{response}\n")
-                responses.append(response)
-            except WebSocketDisconnect:
-                pass
-            except Exception:
-                pass
-
-    # Opening the audio file
-    signal, sr = librosa.load(audio_path, sr=source_sr, mono=True)
-    duration = librosa.get_duration(signal, sr=source_sr)
-    buffer = io.BytesIO()
-    sf.write(buffer, signal, samplerate=sr, subtype="PCM_16", format="wav")
-    buffer.seek(0)
-
-    start_new_thread(read_transcript, (client,))
-    # While loop for the transfer of file
-    start_time = time.time()
-    while data := buffer.read(buffer_length):
-        if client.send_binary(data):
-            # We divide by 2 to correlate the waiting time with the audio duration
-            time.sleep(frame_duration / 1000 / 2)  # waiting for 20 miliseconds
-    logger.info(
-        f"It tooks {time.time() - start_time} to reproduce the audio of {duration}"
-    )
-    client.close()
+    
 
 
 if __name__ == "__main__":
