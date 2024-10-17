@@ -1,8 +1,8 @@
 import logging
 
+import numpy as np
 import torch
 import whisper
-import numpy as np
 
 from awss.meta.streaming_interfaces import ASRStreamingInterface
 
@@ -27,7 +27,9 @@ class WhisperForStreaming(ASRStreamingInterface):
         audio_buffer = audio_buffer.astype("float32")
         audio = whisper.pad_or_trim(audio_buffer)
         # make log-Mel spectrogram and move to the same device as the model
-        mel = whisper.log_mel_spectrogram(audio).to(self.model.device)
+        mel = whisper.log_mel_spectrogram(audio, device=self.device).to(
+            self.model.device
+        )
 
         # decode the audio
         options = whisper.DecodingOptions(fp16=False, language="en")
