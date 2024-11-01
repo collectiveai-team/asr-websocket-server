@@ -18,7 +18,6 @@ from awss.streaming.stream_manager import StreamManager
 from awss.meta.streaming_interfaces import ASRStreamingInterface
 from awss.streaming.frames_chunk_policy import FramesChunkPolicy
 from awss.streaming.whisper_streaming import WhisperForStreaming
-from awss.streaming.speech_recognition_manager import SpeechRecognitionStreamManager
 
 # from awss.streaming.nemo_streaming import ConformerCTCForStreaming
 
@@ -80,7 +79,7 @@ VADModel = Enum(value="VADModel", names=[(k, k) for k in VAD_LOADER])
 MODELS = {"whisper": WhisperForStreaming, "custom": load_custom_model}
 Model = Enum(value="Model", names=[(k, k) for k in MODELS])
 
-STREAM_MANAGERS = {"speech": SpeechRecognitionStreamManager, "default": StreamManager}
+STREAM_MANAGERS = {"default": StreamManager}
 
 STREAM_MANAGER = Enum(value="StreamManager", names=[(k, k) for k in STREAM_MANAGERS])
 
@@ -179,7 +178,7 @@ def cli(
         help="VAD model to use",
     ),
     strm_mgr: STREAM_MANAGER = typer.Option(
-        "speech",
+        "default",
         help="Stream manager to use",
     ),
     source_sr: int = typer.Option(
@@ -230,6 +229,4 @@ def cli(
 
 
 if __name__ == "__main__":
-    app()
-    app()
     app()

@@ -14,7 +14,7 @@ class WhisperForStreaming(ASRStreamingInterface):
         if not device:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
-        self.model = whisper.load_model(model_name)
+        self.model = whisper.load_model("base.en")
         logger.info("Model loaded.")
 
     def frames_to_logits(self, audio_buffer: np.ndarray) -> np.ndarray:

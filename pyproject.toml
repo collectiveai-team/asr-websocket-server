@@ -67,9 +67,3 @@ filterwarnings = [
     'ignore:.*:DeprecationWarning',
 ]
 
-[tool.poetry.system_dependencies]
-apt = [
-    "portaudio19-dev",
-    "libsndfile1",
-    "ffmpeg"
-]

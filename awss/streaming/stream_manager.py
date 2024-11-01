@@ -80,14 +80,17 @@ class StreamManager:
             else:
                 if consecutive_speech > 0:
                     self.frames_information[-1].append((consecutive_speech, 1))
-                if len(frames) > 2:
+                if len(frames) > 10:
                     self.asr_input_queue.put(frames)
                 frames = b""
                 consecutive_no_speech += 1
                 consecutive_speech = 0
             if consecutive_no_speech > 20 or (
-                n_frames_without_pause > 40 and consecutive_no_speech > 5
+                n_frames_without_pause > 80 and consecutive_no_speech > 5
             ):
+                logger.info(
+                    f"cconsecutive_no_speechon: {consecutive_no_speech}. n_frames_without_pause: {n_frames_without_pause} "
+                )
                 self.asr_input_queue.put("pause_on_speech")
                 self.frames_information.append([])
                 consecutive_no_speech = 0
