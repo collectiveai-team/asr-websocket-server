@@ -1,12 +1,12 @@
+import collections
+import logging
 import os
 import sys
-import logging
-import collections
 from pathlib import Path
 
-import torch
-import numpy as np
 import nemo.collections.asr as nemo_asr
+import numpy as np
+import torch
 from pyctcdecode import build_ctcdecoder
 
 from awss.meta.streaming_interfaces import ASRStreamingInterface
@@ -64,6 +64,8 @@ class ConformerCTCForStreaming(ASRStreamingInterface):
     def logits_to_text(self, logits: np.ndarray) -> str:
         return self.decoder.decode(logits)
 
-    def frames_to_text(self, audio_buffer: np.ndarray) -> str:
+    def frames_to_text(
+        self, audio_buffer: np.ndarray, previous_transcript: str = ""
+    ) -> str:
         logits = self.frames_to_logits(audio_buffer)
         return self.logits_to_text(logits)

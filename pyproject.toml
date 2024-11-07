@@ -34,6 +34,7 @@ uvicorn = {extras = ["standard"], version = "0.18.2"}
 typer = "0.6.1"
 soundfile = "0.10.2"
 pyaudio = "0.2.12"
+rich = "^13.9.4"
 
 #[tool.poetry.group.nemo]
 #optional = true
@@ -46,7 +47,9 @@ pyaudio = "0.2.12"
 optional = true
 
 [tool.poetry.group.whisper.dependencies]
- openai-whisper = "^v20231117"
+torch = "^2.5.1"
+torchaudio = "^2.5.1"
+openai-whisper = "^20240930"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -66,4 +69,3 @@ filterwarnings = [
     # note the use of single quote below to denote "raw" strings in TOML
     'ignore:.*:DeprecationWarning',
 ]
-
