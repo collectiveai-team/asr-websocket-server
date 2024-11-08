@@ -196,6 +196,10 @@ def cli(
         False,
         help="Enable partial results",
     ),
+    exclude_silence_chunks: bool = typer.Option(
+        False,
+        help="Enable filter chunks with silences",
+    ),
 ):
     vad = vad.name
     policy = policy.name
@@ -214,7 +218,13 @@ def cli(
         )
         # manager = STREAM_MANAGERS[strm_mgr](model, vad_model, chunk_policy, source_sr)
         # return manager
-        return StreamManager(model, vad_model, chunk_policy, source_sr)
+        return StreamManager(
+            model,
+            vad_model,
+            chunk_policy,
+            source_sr,
+            exclude_silences=exclude_silence_chunks,
+        )
         # return SpeechRecognitionStreamManager(model, vad_model, chunk_policy, source_sr)
 
     logger.info("Starting stream server...")

@@ -27,6 +27,10 @@ class VADModelInterface:
     def user_is_speaking_with_proba(self, buffer_frame: bytes) -> float:
         pass
 
+    @abstractmethod
+    def reset_states(self):
+        pass
+
 
 class PolicyStates(Enum):
     SKIP = 0

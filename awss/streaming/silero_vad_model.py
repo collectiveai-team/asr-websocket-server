@@ -24,7 +24,7 @@ class SileroVAD(VADModelInterface):
         self.threshold = threshold_map.get(intensity, 0.8)
 
         self.model, _ = torch.hub.load(
-            repo_or_dir="snakers4/silero-vad", model="silero_vad", force_reload=False
+            repo_or_dir="snakers4/silero-vad", model="silero_vad", force_reload=True
         )
         self.model.eval()
         self.model = self.model.to(torch.float32)  # Set model to float32
@@ -85,3 +85,6 @@ class SileroVAD(VADModelInterface):
 
         speech_prob = self.user_is_speaking_with_proba(buffer_frame=buffer_frame)
         return speech_prob > self.threshold
+
+    def resst_states(self):
+        self.model.reset_states()

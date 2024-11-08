@@ -4,8 +4,6 @@ import threading
 import traceback
 from queue import Queue
 
-import torch
-
 from awss.logger import get_logger
 from awss.meta.streaming_interfaces import (
     ASRStreamingInterface,
@@ -18,7 +16,12 @@ logger = get_logger(__name__)
 
 
 class SpeechFrameDetectorSilero:
-    def __init__(self, vad_model, threshold: float = 0.5, sampling_rate: int = 16000):
+    def __init__(
+        self,
+        vad_model: VADModelInterface,
+        threshold: float = 0.65,
+        sampling_rate: int = 16000,
+    ):
         self.consecutive_no_speech = 0
         self.consecutive_speech = 0
         self.n_frames_without_pause = 0
@@ -38,14 +41,25 @@ class SpeechFrameDetectorSilero:
         self.min_silence_samples = sampling_rate * self.min_silence_duration_ms / 1000
         self.speech_pad_samples = sampling_rate * self.speech_pad_ms / 1000
 
-    def process_frame(self, frame):
-        if not torch.is_tensor(frame):
-            frame = torch.Tensor(frame)
+        self.n_frames_without_pause_min_threshold = int(
+            os.getenv("N_FRAMES_WITHOUT_MIN_PAUSE_THRESHOLD", "150")
+        )
+        self.n_frames_without_pause_max_threshold = int(
+            os.getenv("N_FRAMES_WITHOUT_MAX_PAUSE_THRESHOLD", "450")
+        )
+        self.consecutive_no_speech_lower_threshold = int(
+            os.getenv("CONSECUTIVE_NO_SPEECH_LOWER_THRESHOLD", "1")
+        )
+        self.consecutive_no_speech_upper_threshold = int(
+            os.getenv("CONSECUTIVE_NO_SPEECH_UPPER_THRESHOLD", "10")
+        )
 
-        window_size_samples = len(frame[0]) if frame.dim() == 2 else len(frame)
+    def process_frame(self, frame):
+
+        window_size_samples = len(frame)
         self.current_sample += window_size_samples
 
-        speech_prob = self.vad_model(frame, self.sampling_rate).item()
+        speech_prob = self.vad_model.user_is_speaking_with_proba(frame)
 
         # Update speech state
         self.is_speech = speech_prob >= self.threshold
@@ -75,6 +89,12 @@ class SpeechFrameDetectorSilero:
                 self.temp_end = self.current_sample
 
     def should_pause(self):
+        if (
+            self.n_frames_without_pause > self.n_frames_without_pause_max_threshold
+            and self.consecutive_no_speech > self.consecutive_no_speech_lower_threshold
+        ):
+            return True
+
         if not self.triggered:
             return False
 
@@ -102,14 +122,17 @@ class SpeechFrameDetectorWebRTC:
         self.n_frames_without_pause = 0
         self.is_speech = False
         self.vad_model = vad_model
-        self.n_frames_without_pause_threshold = int(
-            os.getenv("N_FRAMES_WITHOUT_PAUSE_THRESHOLD", "80")
+        self.n_frames_without_pause_min_threshold = int(
+            os.getenv("N_FRAMES_WITHOUT_MIN_PAUSE_THRESHOLD", "150")
+        )
+        self.n_frames_without_pause_max_threshold = int(
+            os.getenv("N_FRAMES_WITHOUT_MAX_PAUSE_THRESHOLD", "450")
         )
         self.consecutive_no_speech_lower_threshold = int(
-            os.getenv("CONSECUTIVE_NO_SPEECH_LOWER_THRESHOLD", "3")
+            os.getenv("CONSECUTIVE_NO_SPEECH_LOWER_THRESHOLD", "1")
         )
         self.consecutive_no_speech_upper_threshold = int(
-            os.getenv("CONSECUTIVE_NO_SPEECH_UPPER_THRESHOLD", "20")
+            os.getenv("CONSECUTIVE_NO_SPEECH_UPPER_THRESHOLD", "10")
         )
 
     def process_frame(self, frame):
@@ -130,12 +153,11 @@ class SpeechFrameDetectorWebRTC:
 
     def should_pause(self):
         return (
-            # self.consecutive_no_speech > self.consecutive_no_speech_upper_threshold
-            False
+            self.n_frames_without_pause > self.n_frames_without_pause_max_threshold
             or (
-                self.n_frames_without_pause > self.n_frames_without_pause_threshold
+                self.n_frames_without_pause > self.n_frames_without_pause_min_threshold
                 and self.consecutive_no_speech
-                > self.consecutive_no_speech_lower_threshold
+                > self.consecutive_no_speech_upper_threshold
             )
         )
 
