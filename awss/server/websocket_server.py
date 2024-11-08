@@ -23,7 +23,7 @@ from awss.streaming.whisper_streaming import WhisperForStreaming
 # from awss.streaming.nemo_streaming import ConformerCTCForStreaming
 
 
-def load_custom_model() -> ASRStreamingInterface:
+def load_custom_model(model_name) -> ASRStreamingInterface:
     import os
     from importlib import import_module
 
@@ -41,7 +41,7 @@ def load_custom_model() -> ASRStreamingInterface:
         assert issubclass(
             CustomModelClass, ASRStreamingInterface
         ), "CustomModelClass must implement ASRStreamingInterface"
-        return CustomModelClass()
+        return CustomModelClass(model_name=model_name)
 
     else:
         raise ValueError("CUSTOM_MODEL_PATH not set in .env file")
