@@ -1,7 +1,7 @@
 import librosa
 import numpy as np
 
-from awss.meta.streaming_interfaces import PolicyStates, ChunkPolicyInterface
+from awss.meta.streaming_interfaces import ChunkPolicyInterface, PolicyStates
 
 
 class FramesChunkPolicy(ChunkPolicyInterface):

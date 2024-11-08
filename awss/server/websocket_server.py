@@ -1,24 +1,24 @@
 #!/usr/bin/python
-import gc
-import sys
 import asyncio
+import gc
 import logging
 import multiprocessing
+import sys
+from _thread import start_new_thread
 from enum import Enum
 from queue import Queue
-from _thread import start_new_thread
 
 import typer
 import uvicorn
+from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
-from fastapi import Query, Depends, FastAPI, WebSocket, WebSocketDisconnect
 
-from awss.streaming.webrtc_vad_model import WebRTCVAD
-from awss.streaming.stream_manager import StreamManager
 from awss.meta.streaming_interfaces import ASRStreamingInterface
 from awss.streaming.frames_chunk_policy import FramesChunkPolicy
+from awss.streaming.silero_vad_model import SileroVAD
+from awss.streaming.stream_manager import StreamManager
+from awss.streaming.webrtc_vad_model import WebRTCVAD
 from awss.streaming.whisper_streaming import WhisperForStreaming
-from awss.streaming.speech_recognition_manager import SpeechRecognitionStreamManager
 
 # from awss.streaming.nemo_streaming import ConformerCTCForStreaming
 
@@ -70,9 +70,7 @@ POLICIES = {
 Policy = Enum(value="Policy", names=[(k, k) for k in POLICIES])
 
 
-VAD_LOADER = {
-    "webrtcvad": WebRTCVAD,
-}
+VAD_LOADER = {"webrtcvad": WebRTCVAD, "silerovad": SileroVAD}
 VADModel = Enum(value="VADModel", names=[(k, k) for k in VAD_LOADER])
 
 
@@ -80,7 +78,7 @@ VADModel = Enum(value="VADModel", names=[(k, k) for k in VAD_LOADER])
 MODELS = {"whisper": WhisperForStreaming, "custom": load_custom_model}
 Model = Enum(value="Model", names=[(k, k) for k in MODELS])
 
-STREAM_MANAGERS = {"speech": SpeechRecognitionStreamManager, "default": StreamManager}
+STREAM_MANAGERS = {"default": StreamManager}
 
 STREAM_MANAGER = Enum(value="StreamManager", names=[(k, k) for k in STREAM_MANAGERS])
 
@@ -175,11 +173,11 @@ def cli(
         case_sensitive=False,
     ),
     vad: VADModel = typer.Option(
-        "webrtcvad",
+        "silerovad",
         help="VAD model to use",
     ),
     strm_mgr: STREAM_MANAGER = typer.Option(
-        "speech",
+        "default",
         help="Stream manager to use",
     ),
     source_sr: int = typer.Option(
@@ -194,6 +192,14 @@ def cli(
         16_000,
         help="SampleRate of the VAD model",
     ),
+    partial_results: bool = typer.Option(
+        False,
+        help="Enable partial results",
+    ),
+    exclude_silence_chunks: bool = typer.Option(
+        False,
+        help="Enable filter chunks with silences",
+    ),
 ):
     vad = vad.name
     policy = policy.name
@@ -205,11 +211,20 @@ def cli(
 
     def stream_manager_init():
         logger.info(f"Initializing StreamManager with {policy} policy")
-        vad_model = VAD_LOADER[vad](2, vad_sr)
-        chunk_policy = POLICIES[policy](source_sr, asr_sr, 4)
+        # vad_model = VAD_LOADER[vad](2, vad_sr)
+        vad_model = SileroVAD(0, vad_sr)
+        chunk_policy = POLICIES[policy](
+            source_sr, asr_sr, 4 if partial_results else 1e10
+        )
         # manager = STREAM_MANAGERS[strm_mgr](model, vad_model, chunk_policy, source_sr)
         # return manager
-        return StreamManager(model, vad_model, chunk_policy, source_sr)
+        return StreamManager(
+            model,
+            vad_model,
+            chunk_policy,
+            source_sr,
+            exclude_silences=exclude_silence_chunks,
+        )
         # return SpeechRecognitionStreamManager(model, vad_model, chunk_policy, source_sr)
 
     logger.info("Starting stream server...")

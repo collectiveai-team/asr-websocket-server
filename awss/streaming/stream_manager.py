@@ -1,18 +1,195 @@
+import os
 import sys
-import logging
 import threading
 import traceback
 from queue import Queue
 
+from awss.logger import get_logger
 from awss.meta.streaming_interfaces import (
+    ASRStreamingInterface,
+    ChunkPolicyInterface,
     PolicyStates,
     VADModelInterface,
-    ChunkPolicyInterface,
-    ASRStreamingInterface,
 )
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+
+class SpeechFrameDetectorSilero:
+    def __init__(
+        self,
+        vad_model: VADModelInterface,
+        threshold: float = 0.65,
+        sampling_rate: int = 16000,
+    ):
+        self.consecutive_no_speech = 0
+        self.consecutive_speech = 0
+        self.n_frames_without_pause = 0
+        self.is_speech = False
+        self.vad_model = vad_model
+
+        # Silero specific parameters
+        self.threshold = threshold
+        self.sampling_rate = sampling_rate
+        self.triggered = False
+        self.temp_end = 0
+        self.current_sample = 0
+
+        # Configurable thresholds
+        self.min_silence_duration_ms = 100
+        self.speech_pad_ms = 30
+        self.min_silence_samples = sampling_rate * self.min_silence_duration_ms / 1000
+        self.speech_pad_samples = sampling_rate * self.speech_pad_ms / 1000
+
+        self.n_frames_without_pause_min_threshold = int(
+            os.getenv("N_FRAMES_WITHOUT_MIN_PAUSE_THRESHOLD", "150")
+        )
+        self.n_frames_without_pause_max_threshold = int(
+            os.getenv("N_FRAMES_WITHOUT_MAX_PAUSE_THRESHOLD", "450")
+        )
+        self.consecutive_no_speech_lower_threshold = int(
+            os.getenv("CONSECUTIVE_NO_SPEECH_LOWER_THRESHOLD", "1")
+        )
+        self.consecutive_no_speech_upper_threshold = int(
+            os.getenv("CONSECUTIVE_NO_SPEECH_UPPER_THRESHOLD", "10")
+        )
+
+    def process_frame(self, frame):
+
+        window_size_samples = len(frame)
+        self.current_sample += window_size_samples
+
+        speech_prob = self.vad_model.user_is_speaking_with_proba(frame)
+
+        # Update speech state
+        self.is_speech = speech_prob >= self.threshold
+
+        if self.is_speech:
+            self.handle_speech()
+            if speech_prob >= self.threshold and self.temp_end:
+                self.temp_end = 0
+        else:
+            self.handle_silence(speech_prob)
+
+        self.n_frames_without_pause += 1
+
+    def handle_speech(self):
+        self.consecutive_no_speech = 0
+        self.consecutive_speech += 1
+
+        if not self.triggered:
+            self.triggered = True
+
+    def handle_silence(self, speech_prob):
+        self.consecutive_speech = 0
+        self.consecutive_no_speech += 1
+
+        if speech_prob < (self.threshold - 0.15) and self.triggered:
+            if not self.temp_end:
+                self.temp_end = self.current_sample
+
+    def should_pause(self):
+        if (
+            self.n_frames_without_pause > self.n_frames_without_pause_max_threshold
+            and self.consecutive_no_speech > self.consecutive_no_speech_lower_threshold
+        ):
+            return True
+
+        if not self.triggered:
+            return False
+
+        if self.temp_end and (
+            self.current_sample - self.temp_end >= self.min_silence_samples
+        ):
+            self.triggered = False
+            return True
+
+        return False
+
+    def reset_pause_counters(self):
+        self.consecutive_no_speech = 0
+        self.n_frames_without_pause = 0
+        self.temp_end = 0
+        self.current_sample = 0
+        self.triggered = False
+        self.vad_model.reset_states()
+
+
+class SpeechFrameDetectorWebRTC:
+    def __init__(self, vad_model):
+        self.consecutive_no_speech = 0
+        self.consecutive_speech = 0
+        self.n_frames_without_pause = 0
+        self.is_speech = False
+        self.vad_model = vad_model
+        self.n_frames_without_pause_min_threshold = int(
+            os.getenv("N_FRAMES_WITHOUT_MIN_PAUSE_THRESHOLD", "150")
+        )
+        self.n_frames_without_pause_max_threshold = int(
+            os.getenv("N_FRAMES_WITHOUT_MAX_PAUSE_THRESHOLD", "450")
+        )
+        self.consecutive_no_speech_lower_threshold = int(
+            os.getenv("CONSECUTIVE_NO_SPEECH_LOWER_THRESHOLD", "1")
+        )
+        self.consecutive_no_speech_upper_threshold = int(
+            os.getenv("CONSECUTIVE_NO_SPEECH_UPPER_THRESHOLD", "10")
+        )
+
+    def process_frame(self, frame):
+        self.is_speech = self.vad_model.user_is_speaking(frame)
+        if self.is_speech:
+            self.handle_speech()
+        else:
+            self.handle_silence()
+        self.n_frames_without_pause += 1
+
+    def handle_speech(self):
+        self.consecutive_no_speech = 0
+        self.consecutive_speech += 1
+
+    def handle_silence(self):
+        self.consecutive_speech = 0
+        self.consecutive_no_speech += 1
+
+    def should_pause(self):
+        return (
+            self.n_frames_without_pause > self.n_frames_without_pause_max_threshold
+            or (
+                self.n_frames_without_pause > self.n_frames_without_pause_min_threshold
+                and self.consecutive_no_speech
+                > self.consecutive_no_speech_upper_threshold
+            )
+        )
+
+    def reset_pause_counters(self):
+        self.consecutive_no_speech = 0
+        self.n_frames_without_pause = 0
+
+
+class FrameAccumulator:
+    def __init__(self, exclude_silences: bool = True):
+        self.frames = b""
+        self.exclude_silences = exclude_silences
+        self.frames_information = [[]]
+
+    def add_frame(self, frame, detector: SpeechFrameDetectorWebRTC):
+        if detector.is_speech:
+            self.frames += frame
+            if detector.consecutive_no_speech > 0:
+                self.frames_information[-1].append((detector.consecutive_no_speech, 0))
+        else:
+            if detector.consecutive_no_speech < 20 or not self.exclude_silences:
+                self.frames += frame
+
+            if detector.consecutive_speech > 0:
+                self.frames_information[-1].append((detector.consecutive_speech, 1))
+
+    def should_process(self):
+        return len(self.frames) > 10
+
+    def reset(self):
+        self.frames = b""
+        self.frames_information.append([])
 
 
 class StreamManager:
@@ -24,6 +201,7 @@ class StreamManager:
         source_sr: int = 48_000,
         vad_sr: int = 16_000,
         asr_sr: int = 16_000,
+        exclude_silences: bool = True,
     ):
         self.asr_model = asr_model
         self.vad_model = vad_model
@@ -33,6 +211,7 @@ class StreamManager:
         self.asr_sr = asr_sr
         self.exit_event = threading.Event()
         self.running = True
+        self.exclude_silences = exclude_silences
 
     def stop(self):
         """stop the asr process"""
@@ -57,43 +236,32 @@ class StreamManager:
         self.vad_process.start()
 
     def vad_process(self, stream_func):
-        frames = b""
-        consecutive_no_speech = 0
-        consecutive_speech = 0
-        n_frames_without_pause = 0
-        self.n_frames = 0
-        self.frames_information = [[]]
-        logger.info(f"vad_sample rate => {self.vad_model.original_sr}")
-        while not self.exit_event.is_set() and self.running:
+        speech_detector = SpeechFrameDetectorSilero(self.vad_model)
+        frame_accumulator = FrameAccumulator(exclude_silences=self.exclude_silences)
+
+        while (
+            not self.exit_event.is_set() and self.running
+        ):  # Using the existing self.running attribute
             frame = stream_func()
             if frame == "close":
                 self.asr_input_queue.put("pause_on_speech")
                 break
-            self.n_frames += 1
-            is_speech = self.vad_model.user_is_speaking(frame)
-            if is_speech:
-                if consecutive_no_speech > 0:
-                    self.frames_information[-1].append((consecutive_no_speech, 0))
-                consecutive_no_speech = 0
-                consecutive_speech += 1
-                frames += frame
-            else:
-                if consecutive_speech > 0:
-                    self.frames_information[-1].append((consecutive_speech, 1))
-                if len(frames) > 2:
-                    self.asr_input_queue.put(frames)
-                frames = b""
-                consecutive_no_speech += 1
-                consecutive_speech = 0
-            if consecutive_no_speech > 20 or (
-                n_frames_without_pause > 40 and consecutive_no_speech > 5
-            ):
+
+            speech_detector.process_frame(frame)
+            frame_accumulator.add_frame(frame, speech_detector)
+
+            if frame_accumulator.should_process():
+                self.asr_input_queue.put(frame_accumulator.frames)
+                frame_accumulator.reset()
+
+            if speech_detector.should_pause():
+                logger.info(
+                    f"consecutive_no_speech: {speech_detector.consecutive_no_speech}. n_frames_without_pause: {speech_detector.n_frames_without_pause}"
+                )
                 self.asr_input_queue.put("pause_on_speech")
-                self.frames_information.append([])
-                consecutive_no_speech = 0
-                n_frames_without_pause = 0
-            else:
-                n_frames_without_pause = n_frames_without_pause + 1
+                frame_accumulator.reset()
+                speech_detector.reset_pause_counters()
+
         logger.info("Ending vad_process!")
 
     def update_params(self, source_sr: int, vad_sr: int):
@@ -107,6 +275,7 @@ class StreamManager:
     def asr_process(self):
 
         logger.info("\nlistening...\n")
+        previous_transcript = ""
         while not self.exit_event.is_set() and self.running:
             try:
                 audio_frames = self.asr_input_queue.get()
@@ -116,10 +285,18 @@ class StreamManager:
                     final_preds = self.chunk_policy.consume_final_prediction()
                     if final_preds is None or len(final_preds) == 0:
                         continue
-                    text = self.asr_model.frames_to_text(final_preds)
+                    text = self.asr_model.frames_to_text(
+                        final_preds, previous_transcript=previous_transcript
+                    )
 
                     if text != "":
                         self.asr_output_queue.put(text)
+                        previous_transcript += text
+                        previous_transcript = (
+                            ".".join(previous_transcript.split(".")[-2:])
+                            if "." in previous_transcript
+                            else previous_transcript
+                        )
                         text = None
                     continue
                 self.chunk_policy.process_audio_frames(audio_frames)

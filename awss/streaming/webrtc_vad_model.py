@@ -1,5 +1,5 @@
-import sys
 import logging
+import sys
 
 import webrtcvad
 
@@ -14,6 +14,12 @@ class WebRTCVAD(VADModelInterface):
         self.vad = webrtcvad.Vad()
         self.vad.set_mode(intensity)
         self.original_sr = original_sr
+
+    def user_is_speaking_with_proba(self, buffer_frame: bytes) -> float:
+        pass
+
+    def reset_states(self):
+        self.vad = webrtcvad.Vad()
 
     def user_is_speaking(self, buffer_frame: bytes):
         is_speech = True

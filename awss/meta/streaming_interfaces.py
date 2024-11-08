@@ -1,5 +1,5 @@
-from enum import Enum
 from abc import abstractmethod
+from enum import Enum
 
 import numpy as np
 
@@ -14,13 +14,21 @@ class ASRStreamingInterface:
         pass
 
     @abstractmethod
-    def frames_to_text(self, frames: np.ndarray, **kwargs):
+    def frames_to_text(self, frames: np.ndarray, previous_transcript: str, **kwargs):
         pass
 
 
 class VADModelInterface:
     @abstractmethod
     def user_is_speaking(self, buffer_frame: bytes):
+        pass
+
+    @abstractmethod
+    def user_is_speaking_with_proba(self, buffer_frame: bytes) -> float:
+        pass
+
+    @abstractmethod
+    def reset_states(self):
         pass
 
 
