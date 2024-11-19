@@ -1,23 +1,23 @@
 #!/usr/bin/python
-import asyncio
 import gc
+import sys
+import asyncio
 import logging
 import multiprocessing
-import sys
-from _thread import start_new_thread
 from enum import Enum
 from queue import Queue
+from _thread import start_new_thread
 
 import typer
 import uvicorn
-from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
+from fastapi import Query, Depends, FastAPI, WebSocket, WebSocketDisconnect
 
+from awss.streaming.silero_vad_model import SileroVAD
+from awss.streaming.webrtc_vad_model import WebRTCVAD
+from awss.streaming.stream_manager import StreamManager
 from awss.meta.streaming_interfaces import ASRStreamingInterface
 from awss.streaming.frames_chunk_policy import FramesChunkPolicy
-from awss.streaming.silero_vad_model import SileroVAD
-from awss.streaming.stream_manager import StreamManager
-from awss.streaming.webrtc_vad_model import WebRTCVAD
 from awss.streaming.whisper_streaming import WhisperForStreaming
 
 # from awss.streaming.nemo_streaming import ConformerCTCForStreaming
@@ -212,7 +212,7 @@ def cli(
     def stream_manager_init():
         logger.info(f"Initializing StreamManager with {policy} policy")
         # vad_model = VAD_LOADER[vad](2, vad_sr)
-        vad_model = SileroVAD(0, vad_sr)
+        vad_model = SileroVAD(2, vad_sr)
         chunk_policy = POLICIES[policy](
             source_sr, asr_sr, 4 if partial_results else 1e10
         )

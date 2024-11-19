@@ -6,10 +6,10 @@ from queue import Queue
 
 from awss.logger import get_logger
 from awss.meta.streaming_interfaces import (
-    ASRStreamingInterface,
-    ChunkPolicyInterface,
     PolicyStates,
     VADModelInterface,
+    ChunkPolicyInterface,
+    ASRStreamingInterface,
 )
 
 logger = get_logger(__name__)
@@ -19,17 +19,19 @@ class SpeechFrameDetectorSilero:
     def __init__(
         self,
         vad_model: VADModelInterface,
-        threshold: float = 0.65,
+        threshold: float = 0.5,
         sampling_rate: int = 16000,
     ):
         self.consecutive_no_speech = 0
         self.consecutive_speech = 0
         self.n_frames_without_pause = 0
+        self.speech_chunks_without_process = 0
         self.is_speech = False
         self.vad_model = vad_model
 
         # Silero specific parameters
         self.threshold = threshold
+        self.original_threshold = threshold
         self.sampling_rate = sampling_rate
         self.triggered = False
         self.temp_end = 0
@@ -51,7 +53,7 @@ class SpeechFrameDetectorSilero:
             os.getenv("CONSECUTIVE_NO_SPEECH_LOWER_THRESHOLD", "1")
         )
         self.consecutive_no_speech_upper_threshold = int(
-            os.getenv("CONSECUTIVE_NO_SPEECH_UPPER_THRESHOLD", "10")
+            os.getenv("CONSECUTIVE_NO_SPEECH_UPPER_THRESHOLD", "50")
         )
 
     def process_frame(self, frame):
@@ -59,10 +61,19 @@ class SpeechFrameDetectorSilero:
         window_size_samples = len(frame)
         self.current_sample += window_size_samples
 
+        if self.consecutive_no_speech > 10 * self.consecutive_no_speech_upper_threshold:
+            self.vad_model.reset_states()
+
         speech_prob = self.vad_model.user_is_speaking_with_proba(frame)
 
         # Update speech state
         self.is_speech = speech_prob >= self.threshold
+
+        # if self.temp_end and (
+        #     self.current_sample - self.temp_end >= self.min_silence_samples
+        # ):
+        #     self.triggered = False
+        #     self.is_speech = False
 
         if self.is_speech:
             self.handle_speech()
@@ -76,6 +87,7 @@ class SpeechFrameDetectorSilero:
     def handle_speech(self):
         self.consecutive_no_speech = 0
         self.consecutive_speech += 1
+        self.speech_chunks_without_process += 1
 
         if not self.triggered:
             self.triggered = True
@@ -89,20 +101,43 @@ class SpeechFrameDetectorSilero:
                 self.temp_end = self.current_sample
 
     def should_pause(self):
+
         if (
-            self.n_frames_without_pause > self.n_frames_without_pause_max_threshold
-            and self.consecutive_no_speech > self.consecutive_no_speech_lower_threshold
+            self.consecutive_no_speech > self.consecutive_no_speech_upper_threshold
+            and self.speech_chunks_without_process > 3
         ):
             return True
 
-        if not self.triggered:
-            return False
-
-        if self.temp_end and (
-            self.current_sample - self.temp_end >= self.min_silence_samples
+        if (
+            self.n_frames_without_pause > 5_000
+            and self.consecutive_no_speech > 500
+            and self.speech_chunks_without_process > 0
         ):
-            self.triggered = False
             return True
+
+        if self.consecutive_no_speech > 500:
+            self.threshold = max(0.2, self.threshold - 0.2)
+
+        if self.consecutive_no_speech > 990:
+            return True
+        # if (
+        #     self.n_frames_without_pause > self.n_frames_without_pause_max_threshold
+        #     and self.consecutive_no_speech > self.consecutive_no_speech_lower_threshold
+        # ):
+        #     return True
+
+        # if not self.triggered:
+        #     return False
+
+        # if self.temp_end and (
+        #     self.current_sample - self.temp_end >= self.min_silence_samples
+        # ):
+        #     self.triggered = False
+        #     return True
+        # if self.n_frames_without_pause > 1000:
+        # logger.info(
+        #     f"consecutive_no_speech: {self.consecutive_no_speech}. n_frames_without_pause: {self.n_frames_without_pause}. speech_chunks_without_process: {self.speech_chunks_without_process} "
+        # )
 
         return False
 
@@ -111,6 +146,8 @@ class SpeechFrameDetectorSilero:
         self.n_frames_without_pause = 0
         self.temp_end = 0
         self.current_sample = 0
+        self.speech_chunks_without_process = 0
+        self.threshold = self.original_threshold
         self.triggered = False
         self.vad_model.reset_states()
 
@@ -167,7 +204,7 @@ class SpeechFrameDetectorWebRTC:
 
 
 class FrameAccumulator:
-    def __init__(self, exclude_silences: bool = True):
+    def __init__(self, exclude_silences: bool = False):
         self.frames = b""
         self.exclude_silences = exclude_silences
         self.frames_information = [[]]
@@ -230,12 +267,12 @@ class StreamManager:
         self.asr_process = threading.Thread(target=self.asr_process)
         self.asr_process.start()
         self.vad_process = threading.Thread(
-            target=self.vad_process,
+            target=self.vad_process_fnc,
             args=[stream_func],
         )
         self.vad_process.start()
 
-    def vad_process(self, stream_func):
+    def vad_process_fnc(self, stream_func):
         speech_detector = SpeechFrameDetectorSilero(self.vad_model)
         frame_accumulator = FrameAccumulator(exclude_silences=self.exclude_silences)
 
@@ -256,7 +293,7 @@ class StreamManager:
 
             if speech_detector.should_pause():
                 logger.info(
-                    f"consecutive_no_speech: {speech_detector.consecutive_no_speech}. n_frames_without_pause: {speech_detector.n_frames_without_pause}"
+                    f"consecutive_no_speech: {speech_detector.consecutive_no_speech}. n_frames_without_pause: {speech_detector.n_frames_without_pause}. speech_chunks_without_process: {speech_detector.speech_chunks_without_process} "
                 )
                 self.asr_input_queue.put("pause_on_speech")
                 frame_accumulator.reset()
