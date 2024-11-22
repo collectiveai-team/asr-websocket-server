@@ -2,14 +2,14 @@ import os
 import sys
 import threading
 import traceback
-from queue import Queue
+from queue import Empty, Queue
 
 from awss.logger import get_logger
 from awss.meta.streaming_interfaces import (
+    ASRStreamingInterface,
+    ChunkPolicyInterface,
     PolicyStates,
     VADModelInterface,
-    ChunkPolicyInterface,
-    ASRStreamingInterface,
 )
 
 logger = get_logger(__name__)
@@ -53,7 +53,7 @@ class SpeechFrameDetectorSilero:
             os.getenv("CONSECUTIVE_NO_SPEECH_LOWER_THRESHOLD", "1")
         )
         self.consecutive_no_speech_upper_threshold = int(
-            os.getenv("CONSECUTIVE_NO_SPEECH_UPPER_THRESHOLD", "50")
+            os.getenv("CONSECUTIVE_NO_SPEECH_UPPER_THRESHOLD", "300")
         )
 
     def process_frame(self, frame):
@@ -108,17 +108,17 @@ class SpeechFrameDetectorSilero:
         ):
             return True
 
-        if (
-            self.n_frames_without_pause > 5_000
-            and self.consecutive_no_speech > 500
-            and self.speech_chunks_without_process > 0
-        ):
-            return True
+        # if (
+        #     self.n_frames_without_pause > 400
+        #     and self.consecutive_no_speech > 400
+        #     and self.speech_chunks_without_process > 0
+        # ):
+        #     return True
 
-        if self.consecutive_no_speech > 500:
+        if self.consecutive_no_speech > self.consecutive_no_speech_upper_threshold:
             self.threshold = max(0.2, self.threshold - 0.2)
 
-        if self.consecutive_no_speech > 990:
+        if self.n_frames_without_pause > self.n_frames_without_pause_max_threshold:
             return True
         # if (
         #     self.n_frames_without_pause > self.n_frames_without_pause_max_threshold
@@ -280,7 +280,10 @@ class StreamManager:
             not self.exit_event.is_set() and self.running
         ):  # Using the existing self.running attribute
             frame = stream_func()
-            if frame == "close":
+            if frame == b"proccess_last":
+                self.asr_input_queue.put("pause_on_speech")
+                continue
+            if frame == "close" or frame == b"close":
                 self.asr_input_queue.put("pause_on_speech")
                 break
 
@@ -315,7 +318,10 @@ class StreamManager:
         previous_transcript = ""
         while not self.exit_event.is_set() and self.running:
             try:
-                audio_frames = self.asr_input_queue.get()
+                try:
+                    audio_frames = self.asr_input_queue.get(timeout=5)
+                except Empty:
+                    audio_frames = "pause_on_speech"
                 if audio_frames == "close":
                     break
                 if audio_frames == "pause_on_speech":
@@ -327,6 +333,7 @@ class StreamManager:
                     )
 
                     if text != "":
+                        logger.info(f"put text in output queue: {text}")
                         self.asr_output_queue.put(text)
                         previous_transcript += text
                         previous_transcript = (
