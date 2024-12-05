@@ -1,5 +1,6 @@
 import logging
 import re
+import wave
 
 import numpy as np
 import torch
@@ -37,20 +38,20 @@ class WhisperForStreaming(ASRStreamingInterface):
         self, audio_buffer: np.ndarray, previous_transcript: str = ""
     ) -> str:
         audio_buffer = audio_buffer.astype("float32")
-        audio = whisper.pad_or_trim(audio_buffer)
-        # make log-Mel spectrogram and move to the same device as the model
-        mel = whisper.log_mel_spectrogram(audio, device=self.device).to(
-            self.model.device
-        )
+        resutl = self.model.transcribe(audio=audio_buffer)
 
-        # decode the audio
-        options = whisper.DecodingOptions(
-            fp16=False, language="en", prompt=previous_transcript
-        )
-        result = whisper.decode(self.model, mel, options)
-
-        transcript = result.text
+        transcript = resutl["text"]
 
         transcript = clean_repeated(transcript)
 
         return transcript
+
+    def dump_audio_chunk(audio_buffer: np.ndarray, transcript: str):
+        with open(f"/resources/{transcript.replace(' ', '_')}.wav", "wb") as temp_wav:
+            with wave.open(temp_wav.name, "wb") as wav_file:
+                wav_file.setnchannels(1)  # Mono audio
+                wav_file.setsampwidth(2)  # 2 bytes per sample (16-bit)
+                wav_file.setframerate(16000)  # Sample rate
+                # Normalize audio data to prevent noise/clipping
+                normalized_audio = np.int16(audio_buffer * 32767)
+                wav_file.writeframes(normalized_audio.tobytes())

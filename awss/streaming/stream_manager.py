@@ -1,15 +1,17 @@
 import os
 import sys
+import wave
+import tempfile
 import threading
 import traceback
 from queue import Empty, Queue
 
 from awss.logger import get_logger
 from awss.meta.streaming_interfaces import (
-    ASRStreamingInterface,
-    ChunkPolicyInterface,
     PolicyStates,
     VADModelInterface,
+    ChunkPolicyInterface,
+    ASRStreamingInterface,
 )
 
 logger = get_logger(__name__)
@@ -53,7 +55,7 @@ class SpeechFrameDetectorSilero:
             os.getenv("CONSECUTIVE_NO_SPEECH_LOWER_THRESHOLD", "1")
         )
         self.consecutive_no_speech_upper_threshold = int(
-            os.getenv("CONSECUTIVE_NO_SPEECH_UPPER_THRESHOLD", "300")
+            os.getenv("CONSECUTIVE_NO_SPEECH_UPPER_THRESHOLD", "70")
         )
 
     def process_frame(self, frame):
@@ -68,12 +70,6 @@ class SpeechFrameDetectorSilero:
 
         # Update speech state
         self.is_speech = speech_prob >= self.threshold
-
-        # if self.temp_end and (
-        #     self.current_sample - self.temp_end >= self.min_silence_samples
-        # ):
-        #     self.triggered = False
-        #     self.is_speech = False
 
         if self.is_speech:
             self.handle_speech()
@@ -104,40 +100,15 @@ class SpeechFrameDetectorSilero:
 
         if (
             self.consecutive_no_speech > self.consecutive_no_speech_upper_threshold
-            and self.speech_chunks_without_process > 3
+            and self.speech_chunks_without_process > 1
         ):
             return True
 
-        # if (
-        #     self.n_frames_without_pause > 400
-        #     and self.consecutive_no_speech > 400
-        #     and self.speech_chunks_without_process > 0
-        # ):
-        #     return True
-
         if self.consecutive_no_speech > self.consecutive_no_speech_upper_threshold:
-            self.threshold = max(0.2, self.threshold - 0.2)
+            self.threshold = max(0.9, self.threshold + 0.2)
 
         if self.n_frames_without_pause > self.n_frames_without_pause_max_threshold:
             return True
-        # if (
-        #     self.n_frames_without_pause > self.n_frames_without_pause_max_threshold
-        #     and self.consecutive_no_speech > self.consecutive_no_speech_lower_threshold
-        # ):
-        #     return True
-
-        # if not self.triggered:
-        #     return False
-
-        # if self.temp_end and (
-        #     self.current_sample - self.temp_end >= self.min_silence_samples
-        # ):
-        #     self.triggered = False
-        #     return True
-        # if self.n_frames_without_pause > 1000:
-        # logger.info(
-        #     f"consecutive_no_speech: {self.consecutive_no_speech}. n_frames_without_pause: {self.n_frames_without_pause}. speech_chunks_without_process: {self.speech_chunks_without_process} "
-        # )
 
         return False
 
@@ -205,6 +176,7 @@ class SpeechFrameDetectorWebRTC:
 
 class FrameAccumulator:
     def __init__(self, exclude_silences: bool = False):
+        self.all_frames = b""
         self.frames = b""
         self.exclude_silences = exclude_silences
         self.frames_information = [[]]
@@ -225,8 +197,19 @@ class FrameAccumulator:
         return len(self.frames) > 10
 
     def reset(self):
+        self.all_frames += self.frames
         self.frames = b""
         self.frames_information.append([])
+
+    def dump_audio(self):
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
+            with wave.open(temp_wav.name, "wb") as wav_file:
+                wav_file.setnchannels(1)  # Mono audio
+                wav_file.setsampwidth(2)  # 2 bytes per sample (16-bit)
+                wav_file.setframerate(16000)  # Sample rate
+                wav_file.writeframes(self.all_frames)
+            return temp_wav.name
 
 
 class StreamManager:
@@ -301,7 +284,7 @@ class StreamManager:
                 self.asr_input_queue.put("pause_on_speech")
                 frame_accumulator.reset()
                 speech_detector.reset_pause_counters()
-
+        # frame_accumulator.dump_audio()
         logger.info("Ending vad_process!")
 
     def update_params(self, source_sr: int, vad_sr: int):
