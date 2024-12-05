@@ -1,17 +1,17 @@
 import os
 import sys
+import wave
 import tempfile
 import threading
 import traceback
-import wave
 from queue import Empty, Queue
 
 from awss.logger import get_logger
 from awss.meta.streaming_interfaces import (
-    ASRStreamingInterface,
-    ChunkPolicyInterface,
     PolicyStates,
     VADModelInterface,
+    ChunkPolicyInterface,
+    ASRStreamingInterface,
 )
 
 logger = get_logger(__name__)
@@ -105,7 +105,7 @@ class SpeechFrameDetectorSilero:
             return True
 
         if self.consecutive_no_speech > self.consecutive_no_speech_upper_threshold:
-            self.threshold = max(0.2, self.threshold - 0.2)
+            self.threshold = max(0.9, self.threshold + 0.2)
 
         if self.n_frames_without_pause > self.n_frames_without_pause_max_threshold:
             return True
