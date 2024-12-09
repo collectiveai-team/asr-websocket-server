@@ -149,7 +149,9 @@ class SpeechFrameDetector:
 
                 # Reset state
                 self.current_speech = {}
-                self.prev_end = self.next_start = self.temp_end = 0
+                self.prev_end = 0
+                self.next_start = 0
+                self.temp_end = 0
                 self.triggered = False
         if self.triggered:
             self.speech_chunks_without_process += 1
@@ -193,7 +195,10 @@ class SpeechFrameDetector:
         Returns True if a speech segment was recently finalized.
         Call reset_pause_state() after handling the pause.
         """
-        return self.pause_triggered
+        should_pause = self.pause_triggered
+        if should_pause:
+            self.reset_pause_state()
+        return should_pause
 
     def reset_pause_state(self):
         """
@@ -233,7 +238,7 @@ class SpeechFrameDetector:
         self.consecutive_silence = 0
         self.in_speech = False
 
-        self.vad_model.reset_states()
+        # self.vad_model.reset_states()
 
     @property
     def is_speech(self):

@@ -86,5 +86,5 @@ class SileroVAD(VADModelInterface):
         speech_prob = self.user_is_speaking_with_proba(buffer_frame=buffer_frame)
         return speech_prob > self.threshold
 
-    def resst_states(self):
+    def reset_states(self):
         self.model.reset_states()
