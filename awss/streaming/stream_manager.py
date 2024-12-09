@@ -1,18 +1,20 @@
 import os
 import sys
-import wave
 import tempfile
 import threading
 import traceback
+import wave
 from queue import Empty, Queue
 
 from awss.logger import get_logger
 from awss.meta.streaming_interfaces import (
+    ASRStreamingInterface,
+    ChunkPolicyInterface,
     PolicyStates,
     VADModelInterface,
-    ChunkPolicyInterface,
-    ASRStreamingInterface,
 )
+from awss.streaming.enhanced_speech_frame_detector import EnhancedSpeechFrameDetector
+from awss.streaming.speech_frame_detector import SpeechFrameDetector
 
 logger = get_logger(__name__)
 
@@ -256,7 +258,16 @@ class StreamManager:
         self.vad_process.start()
 
     def vad_process_fnc(self, stream_func):
-        speech_detector = SpeechFrameDetectorSilero(self.vad_model)
+        # speech_detector = SpeechFrameDetectorSilero(self.vad_model)
+        # speech_detector = EnhancedSpeechFrameDetector(
+        #     vad_model=self.vad_model,
+        #     use_hangover=True,
+        #     use_sliding_window=True,
+        #     use_onset_offset_thresholds=True,
+        #     use_time_based_silence=True,
+        #     use_adaptive_thresholds=True,
+        # )
+        speech_detector = SpeechFrameDetector(vad_model=self.vad_model)
         frame_accumulator = FrameAccumulator(exclude_silences=self.exclude_silences)
 
         while (
