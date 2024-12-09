@@ -1,5 +1,5 @@
-import numpy as np
 import torch
+import numpy as np
 
 from awss.logger import get_logger
 from awss.meta.streaming_interfaces import VADModelInterface
@@ -48,7 +48,7 @@ class SileroVAD(VADModelInterface):
             audio_array = np.frombuffer(buffer_frame, dtype=np.int16)
 
             # Normalize audio to float between -1 and 1
-            audio_float = audio_array.astype(np.float32) / 32767.0
+            audio_float = audio_array.astype(np.float32) / 32768.0
 
             # Determine required padding size based on sample rate
             window_size = 512 if self.original_sr == 16000 else 256

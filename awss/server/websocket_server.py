@@ -1,24 +1,24 @@
 #!/usr/bin/python
-import asyncio
 import gc
-import logging
-import multiprocessing
 import os
 import sys
-from _thread import start_new_thread
+import asyncio
+import logging
+import multiprocessing
 from enum import Enum
 from queue import Queue
+from _thread import start_new_thread
 
 import typer
 import uvicorn
-from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
+from fastapi import Query, Depends, FastAPI, WebSocket, WebSocketDisconnect
 
+from awss.streaming.silero_vad_model import SileroVAD
+from awss.streaming.webrtc_vad_model import WebRTCVAD
+from awss.streaming.stream_manager import StreamManager
 from awss.meta.streaming_interfaces import ASRStreamingInterface
 from awss.streaming.frames_chunk_policy import FramesChunkPolicy
-from awss.streaming.silero_vad_model import SileroVAD
-from awss.streaming.stream_manager import StreamManager
-from awss.streaming.webrtc_vad_model import WebRTCVAD
 from awss.streaming.whisper_streaming import WhisperForStreaming
 
 # from awss.streaming.nemo_streaming import ConformerCTCForStreaming
@@ -114,6 +114,7 @@ async def websocket_endpoint(
         description="VAD sample rate, default None (it use the default server parameter)",
     ),
     stream_manager=Depends(dummy_manager_init),
+    chunk_size: int = 1024,  # twice of the frame size required by Silero, becasue each sample in the audio data is likely represented by 2 bytes (16 bits)
 ):
 
     await websocket.accept()
@@ -127,10 +128,16 @@ async def websocket_endpoint(
     out_queue.join()
     start_new_thread(read_outqueue, (stream_manager, out_queue, websocket))
     try:
+        buffer = bytearray()
         while websocket.state != WebSocketState.DISCONNECTED:
 
             data = await websocket.receive_bytes()
-            in_queue.put(data)
+            buffer.extend(data)
+            if len(buffer) >= chunk_size:
+                chunk = buffer[:chunk_size]
+                buffer = buffer[chunk_size:]
+                in_queue.put(chunk)
+
             if not out_queue.empty():
                 json_ = out_queue.get_nowait()
                 logger.info(f"response: {json_}")
