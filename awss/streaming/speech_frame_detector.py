@@ -50,14 +50,14 @@ class SpeechFrameDetector:
             Number of samples per frame.
         """
 
-        min_speech_duration_ms = os.getenv(
-            "MIN_SPEECH_DURATION_MS", min_speech_duration_ms
+        min_speech_duration_ms = (
+            int(os.getenv("MIN_SPEECH_DURATION_MS")) or min_speech_duration_ms
         )
-        max_speech_duration_s = os.getenv(
-            "MAX_SPEECH_DURATION_S", max_speech_duration_s
+        max_speech_duration_s = (
+            float(os.getenv("MAX_SPEECH_DURATION_S")) or max_speech_duration_s
         )
-        min_silence_duration_ms = os.getenv(
-            "MIN_SILENCE_DURATION_MS", min_silence_duration_ms
+        min_silence_duration_ms = (
+            int(os.getenv("MIN_SILENCE_DURATION_MS")) or min_silence_duration_ms
         )
 
         self.vad_model = vad_model

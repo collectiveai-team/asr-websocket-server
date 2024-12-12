@@ -1,20 +1,20 @@
 import os
 import sys
+import wave
 import tempfile
 import threading
 import traceback
-import wave
 from queue import Empty, Queue
 
 from awss.logger import get_logger
+from awss.streaming.speech_frame_detector import SpeechFrameDetector
+from awss.streaming.enhanced_speech_frame_detector import EnhancedSpeechFrameDetector
 from awss.meta.streaming_interfaces import (
-    ASRStreamingInterface,
-    ChunkPolicyInterface,
     PolicyStates,
     VADModelInterface,
+    ChunkPolicyInterface,
+    ASRStreamingInterface,
 )
-from awss.streaming.enhanced_speech_frame_detector import EnhancedSpeechFrameDetector
-from awss.streaming.speech_frame_detector import SpeechFrameDetector
 
 logger = get_logger(__name__)
 
@@ -289,7 +289,7 @@ class StreamManager:
                 frame_accumulator.reset()
 
             if speech_detector.should_pause():
-                logger.info(
+                logger.debug(
                     f"consecutive_no_speech: {speech_detector.consecutive_no_speech}. n_frames_without_pause: {speech_detector.n_frames_without_pause}. speech_chunks_without_process: {speech_detector.speech_chunks_without_process} "
                 )
                 self.asr_input_queue.put("pause_on_speech")
@@ -327,7 +327,6 @@ class StreamManager:
                     )
 
                     if text != "":
-                        logger.info(f"put text in output queue: {text}")
                         self.asr_output_queue.put(text)
                         previous_transcript += text
                         previous_transcript = (
