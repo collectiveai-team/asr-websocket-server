@@ -1,3 +1,4 @@
+import os
 import math
 
 import torch
@@ -48,6 +49,16 @@ class SpeechFrameDetector:
         window_size_samples: int
             Number of samples per frame.
         """
+
+        min_speech_duration_ms = os.getenv(
+            "MIN_SPEECH_DURATION_MS", min_speech_duration_ms
+        )
+        max_speech_duration_s = os.getenv(
+            "MAX_SPEECH_DURATION_S", max_speech_duration_s
+        )
+        min_silence_duration_ms = os.getenv(
+            "MIN_SILENCE_DURATION_MS", min_silence_duration_ms
+        )
 
         self.vad_model = vad_model
         self.threshold = threshold
@@ -242,4 +253,5 @@ class SpeechFrameDetector:
 
     @property
     def is_speech(self):
+        return self.triggered
         return self.triggered
