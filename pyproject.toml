@@ -32,7 +32,7 @@ pyctcdecode = "0.4.0"
 fastapi = "^0.110.0"
 uvicorn = {extras = ["standard"], version = "^0.18.2"}
 typer = "^0.12.3"
-soundfile = "0.10.2"
+soundfile = ">=0.10.2"
 pyaudio = "0.2.12"
 rich = "^13.9.4"
 SpeechRecognition = "^3.10.4"
