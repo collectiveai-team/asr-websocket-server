@@ -51,9 +51,7 @@ RUN wget https://github.com/pypa/pip/archive/refs/tags/${PIP_VERSION}.zip --no-c
 
 
 # Install Poetry
-RUN curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python && \
-  cd /usr/local/bin && \
-  ln -s /opt/poetry/bin/poetry && \
+RUN curl -sSL https://install.python-poetry.org | POETRY_VERSION=1.8.4 POETRY_HOME=/usr/local python3 - && \
   poetry config virtualenvs.create false
 
 

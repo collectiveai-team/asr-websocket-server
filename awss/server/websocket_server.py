@@ -1,24 +1,24 @@
 #!/usr/bin/python
-import gc
-import os
-import sys
 import asyncio
+import gc
 import logging
 import multiprocessing
+import os
+import sys
+from _thread import start_new_thread
 from enum import Enum
 from queue import Queue
-from _thread import start_new_thread
 
 import typer
 import uvicorn
+from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
-from fastapi import Query, Depends, FastAPI, WebSocket, WebSocketDisconnect
 
-from awss.streaming.silero_vad_model import SileroVAD
-from awss.streaming.webrtc_vad_model import WebRTCVAD
-from awss.streaming.stream_manager import StreamManager
 from awss.meta.streaming_interfaces import ASRStreamingInterface
 from awss.streaming.frames_chunk_policy import FramesChunkPolicy
+from awss.streaming.silero_vad_model import SileroVAD
+from awss.streaming.stream_manager import StreamManager
+from awss.streaming.webrtc_vad_model import WebRTCVAD
 from awss.streaming.whisper_streaming import WhisperForStreaming
 
 # from awss.streaming.nemo_streaming import ConformerCTCForStreaming
@@ -132,11 +132,14 @@ async def websocket_endpoint(
         while websocket.state != WebSocketState.DISCONNECTED:
 
             data = await websocket.receive_bytes()
-            buffer.extend(data)
-            if len(buffer) >= chunk_size:
-                chunk = buffer[:chunk_size]
-                buffer = buffer[chunk_size:]
-                in_queue.put(chunk)
+            if data == b"proccess_last" or data == "proccess_last":
+                in_queue.put(data)
+            else:
+                buffer.extend(data)
+                if len(buffer) >= chunk_size:
+                    chunk = buffer[:chunk_size]
+                    buffer = buffer[chunk_size:]
+                    in_queue.put(chunk)
 
             if not out_queue.empty():
                 json_ = out_queue.get_nowait()

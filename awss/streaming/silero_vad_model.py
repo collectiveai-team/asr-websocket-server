@@ -1,5 +1,5 @@
-import torch
 import numpy as np
+import torch
 
 from awss.logger import get_logger
 from awss.meta.streaming_interfaces import VADModelInterface
@@ -24,7 +24,7 @@ class SileroVAD(VADModelInterface):
         self.threshold = threshold_map.get(intensity, 0.8)
 
         self.model, _ = torch.hub.load(
-            repo_or_dir="snakers4/silero-vad", model="silero_vad", force_reload=True
+            repo_or_dir="snakers4/silero-vad", model="silero_vad", force_reload=False
         )
         self.model.eval()
         self.model = self.model.to(torch.float32)  # Set model to float32

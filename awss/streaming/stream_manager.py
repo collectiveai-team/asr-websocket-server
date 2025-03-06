@@ -1,20 +1,20 @@
 import os
 import sys
-import wave
 import tempfile
 import threading
 import traceback
+import wave
 from queue import Empty, Queue
 
 from awss.logger import get_logger
-from awss.streaming.speech_frame_detector import SpeechFrameDetector
-from awss.streaming.enhanced_speech_frame_detector import EnhancedSpeechFrameDetector
 from awss.meta.streaming_interfaces import (
+    ASRStreamingInterface,
+    ChunkPolicyInterface,
     PolicyStates,
     VADModelInterface,
-    ChunkPolicyInterface,
-    ASRStreamingInterface,
 )
+from awss.streaming.enhanced_speech_frame_detector import EnhancedSpeechFrameDetector
+from awss.streaming.speech_frame_detector import SpeechFrameDetector
 
 logger = get_logger(__name__)
 
@@ -274,7 +274,7 @@ class StreamManager:
             not self.exit_event.is_set() and self.running
         ):  # Using the existing self.running attribute
             frame = stream_func()
-            if frame == b"proccess_last":
+            if frame == b"proccess_last" or frame == "proccess_last":
                 self.asr_input_queue.put("pause_on_speech")
                 continue
             if frame == "close" or frame == b"close":
