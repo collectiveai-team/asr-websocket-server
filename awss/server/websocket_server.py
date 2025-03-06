@@ -239,7 +239,7 @@ def cli(
         )
         # return SpeechRecognitionStreamManager(model, vad_model, chunk_policy, source_sr)
 
-    logger.info("Starting stream server...")
+    logger.info("Starting stream server version 0.0.9 ...")
     server = FastAPI()
 
     server.websocket("/ws")(websocket_endpoint)
