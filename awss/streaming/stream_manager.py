@@ -275,6 +275,7 @@ class StreamManager:
         ):  # Using the existing self.running attribute
             frame = stream_func()
             if frame == b"proccess_last" or frame == "proccess_last":
+                self.asr_input_queue.put(frame_accumulator.frames)
                 self.asr_input_queue.put("pause_on_speech")
                 continue
             if frame == "close" or frame == b"close":
@@ -313,7 +314,7 @@ class StreamManager:
         while not self.exit_event.is_set() and self.running:
             try:
                 try:
-                    audio_frames = self.asr_input_queue.get(timeout=5)
+                    audio_frames = self.asr_input_queue.get(timeout=2)
                 except Empty:
                     audio_frames = "pause_on_speech"
                 if audio_frames == "close":

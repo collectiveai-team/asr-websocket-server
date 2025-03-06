@@ -134,7 +134,8 @@ async def websocket_endpoint(
             data = await websocket.receive_bytes()
             if data == b"proccess_last" or data == "proccess_last":
                 logger.info("proccess_last")
-                in_queue.put(data)
+                in_queue.put(buffer)
+                in_queue.put("proccess_last")
             else:
                 buffer.extend(data)
                 if len(buffer) >= chunk_size:
