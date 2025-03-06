@@ -133,6 +133,7 @@ async def websocket_endpoint(
 
             data = await websocket.receive_bytes()
             if data == b"proccess_last" or data == "proccess_last":
+                logger.info("proccess_last")
                 in_queue.put(data)
             else:
                 buffer.extend(data)
