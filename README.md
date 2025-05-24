@@ -63,3 +63,53 @@ The `.env` file should be in the following format:
 
 ## Contributing
 We welcome contributions to asr websocket server Feel free to submit a pull request with your changes or open an issue if you have any questions or suggestions.
+
+## Performance Tuning
+
+Optimizing the real-time performance of the ASR Websocket Server involves several factors, from Voice Activity Detection (VAD) settings to the choice of ASR model and hardware. Here's how you can tune the system:
+
+### VAD Tuning
+
+Voice Activity Detection is crucial for identifying speech segments in the audio stream. The `SpeechFrameDetector` class is responsible for this. Its accuracy and responsiveness can be tuned via several parameters:
+
+*   **Speech/Silence Durations**:
+    *   `MIN_SPEECH_DURATION_MS`: The minimum duration (in milliseconds) an audio segment must have to be considered speech.
+        *   Environment Variable: `MIN_SPEECH_DURATION_MS`
+    *   `MAX_SPEECH_DURATION_S`: The maximum duration (in seconds) a speech segment can be. If exceeded, the segment is forced to end.
+        *   Environment Variable: `MAX_SPEECH_DURATION_S`
+    *   `MIN_SILENCE_DURATION_MS`: The minimum duration of silence (in milliseconds) required to consider a speech segment ended.
+        *   Environment Variable: `MIN_SILENCE_DURATION_MS`
+*   **Detection Thresholds**:
+    *   The `SpeechFrameDetector` uses internal thresholds to decide if a frame contains speech (`threshold`) and when to end a speech segment (`neg_threshold`). Fine-tuning these may require code modification if not exposed via other configurations.
+*   **VAD Model Selection**:
+    *   You can choose between different VAD models using the `--vad` command-line option.
+    *   `silerovad`: Offers a good balance of accuracy and speed.
+    *   `webrtcvad`: A more lightweight option, potentially faster but might be less accurate in noisy environments.
+
+Experiment with these parameters to find the best balance for your specific audio environment and latency requirements.
+
+### ASR Model
+
+The choice of Automatic Speech Recognition (ASR) model significantly impacts accuracy and processing time.
+
+*   **Whisper Model Selection**:
+    *   The `--model_name` command-line option allows you to select the Whisper model size (e.g., `tiny`, `base`, `small`, `medium`, `large`).
+    *   Larger models (e.g., `medium`, `large`) generally offer higher accuracy but require more computational resources and have higher latency.
+    *   Smaller models (e.g., `tiny`, `base`) are faster but may be less accurate. Choose the smallest model that meets your accuracy needs for better real-time performance.
+*   **FP16 Precision**:
+    *   The system automatically utilizes FP16 (half-precision floating-point) for Whisper model inference when a CUDA-enabled GPU is detected and used. This can significantly speed up processing without a major loss in accuracy.
+
+### Audio Sample Rate
+
+For optimal performance and to avoid unnecessary processing, it's recommended that clients send audio data at the sample rate expected by the ASR model.
+
+*   **Target Sample Rate**:
+    *   The ASR models are typically trained on audio at 16kHz. The server's expected sample rate can be configured using the `--asr_sr` CLI option (defaults to 16000 Hz).
+    *   Sending audio at a different sample rate will force the server to resample it, adding computational overhead and latency.
+
+### Concurrency and Hardware
+
+*   **Threading Model**: The server uses a threading model to handle multiple client connections concurrently.
+*   **GPU Acceleration**: For the best performance, especially with larger ASR models, running the ASR inference on a GPU is highly recommended. CPU-based inference will be significantly slower and may not be suitable for real-time applications with high load.
+
+By considering these aspects, you can tailor the ASR Websocket Server's performance to your specific use case.
