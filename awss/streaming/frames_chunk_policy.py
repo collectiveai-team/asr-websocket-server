@@ -20,11 +20,12 @@ class FramesChunkPolicy(ChunkPolicyInterface):
     def process_audio_frames(self, audio_frames):
         if audio_frames == "close":
             return
-        float64_buffer = np.frombuffer(audio_frames, dtype=np.int16) / 32767
-        float64_buffer = librosa.core.resample(
-            float64_buffer, self.source_sr, self.models_sr
-        )
-        self.buffer_acumulated_for_asr.append(float64_buffer)
+        audio_buffer_processed = np.frombuffer(audio_frames, dtype=np.int16).astype(np.float32) / 32767.0
+        if self.source_sr != self.models_sr:
+            audio_buffer_processed = librosa.core.resample(
+                audio_buffer_processed, orig_sr=self.source_sr, target_sr=self.models_sr
+            )
+        self.buffer_acumulated_for_asr.append(audio_buffer_processed)
         if len(self.buffer_acumulated_for_asr) > self.pacience:
             self.state = PolicyStates.CONSUME_PARTIAL_PREDS
 

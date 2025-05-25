@@ -16,7 +16,14 @@ class WebRTCVAD(VADModelInterface):
         self.original_sr = original_sr
 
     def user_is_speaking_with_proba(self, buffer_frame: bytes) -> float:
-        pass
+        try:
+            if self.user_is_speaking(buffer_frame):
+                return 1.0
+            else:
+                return 0.0
+        except Exception as e:
+            logger.error(f"Exception in user_is_speaking: {e}")
+            return 0.0
 
     def reset_states(self):
         self.vad = webrtcvad.Vad()
